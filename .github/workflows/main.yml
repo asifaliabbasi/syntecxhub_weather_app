@@ -14,12 +14,15 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 120
 
+    permissions:
+      contents: write
+
     steps:
       # 1. Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Setup Java
+      # 2. Setup Java 17
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -58,27 +61,40 @@ jobs:
       - name: Configure Gradle
         run: |
           mkdir -p ~/.gradle
-          echo "org.gradle.vfs.watch=false" >> ~/.gradle/gradle.properties
-          echo "org.gradle.daemon=false" >> ~/.gradle/gradle.properties
-          echo "org.gradle.parallel=true" >> ~/.gradle/gradle.properties
-          echo "org.gradle.jvmargs=-Xmx4g" >> ~/.gradle/gradle.properties
 
-      # 7. Build Release APK
-      - name: Build Release APK
+          cat > ~/.gradle/gradle.properties <<'EOF'
+          org.gradle.vfs.watch=false
+          org.gradle.daemon=false
+          org.gradle.parallel=true
+          org.gradle.jvmargs=-Xmx4g
+          EOF
+
+      # 7. Check Flutter
+      - name: Flutter Doctor
+        run: |
+          flutter --version
+          flutter doctor -v
+
+      # 8. Get dependencies
+      - name: Flutter Pub Get
         run: |
           flutter clean
           flutter pub get
+
+      # 9. Build Release APK
+      - name: Build Release APK
+        run: |
           flutter build apk --release
 
-      # 8. Copy APK into repository
-      - name: Save APK to repository
+      # 10. Save APK inside repository
+      - name: Save APK
         run: |
           mkdir -p builds/android
           cp build/app/outputs/flutter-apk/app-release.apk \
              builds/android/app-release.apk
 
-      # 9. Commit APK
-      - name: Commit APK to repository
+      # 11. Commit APK
+      - name: Commit APK
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -86,7 +102,7 @@ jobs:
           git add builds/android/app-release.apk
 
           if git diff --cached --quiet; then
-            echo "No changes to commit."
+            echo "No APK changes to commit."
           else
             git commit -m "chore: update Android APK build"
             git push
